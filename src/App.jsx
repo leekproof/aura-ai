@@ -51,16 +51,18 @@ const MODELS = {
   gemini: {
     name: "Gemini",
     label: "GEMINI (GOOGLE)",
-    placeholder: "AIza...",
-    keyPrefix: "AIza",
+    placeholder: "AQ. or AIza...",
     docUrl: "aistudio.google.com",
     color: "#2563eb",
     call: async (apiKey, messages, systemPrompt) => {
       const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+        "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent",
         {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            "x-goog-api-key": apiKey.trim(),
+          },
           body: JSON.stringify({
             system_instruction: { parts: [{ text: systemPrompt }] },
             contents: messages.map(m => ({
@@ -78,10 +80,10 @@ const MODELS = {
 };
 
 const SUGGESTIONS = [
-  { label: "EXPLAIN SOMETHING COMPLEX", prompt: "Explain explain something complex and cool, such as how transformers work in AI", accent: "#f97316" },
-  { label: "WRITE WITH ME", prompt: "Proofread my essay, I'm sending it below!", accent: "#2563eb" },
-  { label: "DEBUG MY CODE", prompt: "Debug my code: I'm going to send it below!", accent: "#f97316" },
-  { label: "BRAINSTORM IDEAS", prompt: "Help me brainstorm an idea for...", accent: "#2563eb" },
+  { label: "EXPLAIN SOMETHING COMPLEX", prompt: "Explain how transformers work in AI", accent: "#f97316" },
+  { label: "WRITE WITH ME", prompt: "Help me write a cold email that actually gets replies", accent: "#2563eb" },
+  { label: "DEBUG MY CODE", prompt: "Help me understand why async/await can still block", accent: "#f97316" },
+  { label: "BRAINSTORM IDEAS", prompt: "Give me 5 unconventional startup ideas for 2025", accent: "#2563eb" },
 ];
 
 const STORAGE_KEY = "aura_chats_v3";
@@ -227,7 +229,7 @@ export default function App() {
 
     setLoading(true);
     try {
-      if (!activeKey) throw new Error(`No API key for any AI model added. Open SETTINGS.`);
+      if (!activeKey) throw new Error(`No API key for ${currentModel.name}. Open SETTINGS.`);
       const reply = await currentModel.call(activeKey, historyForApi, SYSTEM_PROMPT);
       setChats(prev => prev.map(c => c.active ? { ...c, messages: [...c.messages, { role: "assistant", content: reply, time: getTime(), id: Date.now() + 1 }] } : c));
     } catch (e) {
@@ -268,10 +270,22 @@ export default function App() {
   const openSettings = () => { setDraftKeys({ ...apiKeys }); setDraftModel(selectedModel); setShowSettings(true); };
   const saveSettings = () => {
     const model = MODELS[draftModel];
-    const key = draftKeys[draftModel] || "";
-    if (key && !key.startsWith(model.keyPrefix)) { showToast(`INVALID KEY FOR ${model.name.toUpperCase()}`); return; }
-    try { localStorage.setItem("aura_keys_v1", JSON.stringify(draftKeys)); localStorage.setItem("aura_model", draftModel); } catch {}
-    setApiKeys({ ...draftKeys });
+    const normalizedKeys = Object.fromEntries(
+      Object.entries(draftKeys).map(([provider, value]) => [provider, (value || "").trim()])
+    );
+    const key = normalizedKeys[draftModel] || "";
+    if (!key) {
+      showToast(`PLEASE ENTER A ${model.name.toUpperCase()} API KEY`);
+      return;
+    }
+    try {
+      localStorage.setItem("aura_keys_v1", JSON.stringify(normalizedKeys));
+      localStorage.setItem("aura_model", draftModel);
+    } catch {
+      showToast("COULD NOT SAVE SETTINGS");
+      return;
+    }
+    setApiKeys(normalizedKeys);
     setSelectedModel(draftModel);
     setShowSettings(false);
     showToast(key ? `${model.name.toUpperCase()} CONNECTED` : "SETTINGS SAVED");
@@ -314,6 +328,18 @@ export default function App() {
               </div>
             ))}
           </div>
+
+          <div style={{ padding: "8px 10px", borderTop: `2px solid ${BORDER}` }}>
+            <div style={{ fontSize: 8, color: isLive ? modelColor : "#bbb", letterSpacing: "0.1em", marginBottom: 5 }}>
+              {isLive ? `● ${currentModel.name.toUpperCase()} LIVE` : "○ NO KEY SET"}
+            </div>
+            <button onClick={openSettings}
+              style={{ fontFamily: "'Space Mono',monospace", fontSize: 8, color: BLUE, background: "none", border: `1px solid ${BLUE}`, padding: "4px 8px", cursor: "pointer", letterSpacing: "0.08em", width: "100%" }}
+              onMouseEnter={e => { e.currentTarget.style.background = BLUE; e.currentTarget.style.color = "#fff"; }}
+              onMouseLeave={e => { e.currentTarget.style.background = "none"; e.currentTarget.style.color = BLUE; }}>
+              SETTINGSsa
+            </button>
+          </div>
         </div>
 
         {/* MAIN */}
@@ -325,32 +351,12 @@ export default function App() {
               <button onClick={toggleDark}
                 title={dark ? "Light mode" : "Dark mode"}
                 style={{ fontFamily: "'Space Mono',monospace", fontSize: 9, color: dark ? "#e8e8e8" : "#999", background: dark ? "#2e3234" : "#eeeee8", border: `1px solid ${BORDER}`, padding: "4px 8px", cursor: "pointer", letterSpacing: "0.08em" }}>
-                {dark ? "☾" : "☀"}
+                {dark ? "☀" : "☾"}
               </button>
-              <button
-  onClick={openSettings}
-  onMouseEnter={e => {
-    e.currentTarget.style.background = BLUE;
-    e.currentTarget.style.color = "#fff";
-  }}
-  onMouseLeave={e => {
-    e.currentTarget.style.background = "none";
-    e.currentTarget.style.color = BLUE;
-  }}
-  style={{
-    fontFamily: "'Space Mono',monospace",
-    fontSize: 9,
-    fontWeight: 700,
-    color: isLive ? "#fff" : BLUE,
-    background: isLive ? modelColor : "none",
-    border: `2px solid ${isLive ? modelColor : BLUE}`,
-    padding: "4px 10px",
-    cursor: "pointer",
-    letterSpacing: "0.1em"
-  }}
->
-  {isLive ? `● ${currentModel.name.toUpperCase()}` : "[SETTINGS]"}
-</button>
+              <button onClick={openSettings}
+                style={{ fontFamily: "'Space Mono',monospace", fontSize: 9, fontWeight: 700, color: isLive ? "#fff" : BLUE, background: isLive ? modelColor : "none", border: `2px solid ${isLive ? modelColor : BLUE}`, padding: "4px 10px", cursor: "pointer", letterSpacing: "0.1em" }}>
+                {isLive ? `● ${currentModel.name.toUpperCase()}` : "[SETTINGS]"}
+              </button>
             </div>
           </div>
 
@@ -361,7 +367,7 @@ export default function App() {
                 <>
                   <Logo size="lg" />
                   <div style={{ fontSize: 9, color: MUTED, letterSpacing: "0.12em", margin: "8px 0 36px" }}>
-                  YOUR FUTURISTIC COMPANION — {isLive ? `${currentModel.name.toUpperCase()} LIVE` : "ADD API KEY IN SETTINGS"}
+                    NO-FLUFF AI — {isLive ? `${currentModel.name.toUpperCase()} LIVE` : "ADD API KEY IN SETTINGS"}
                   </div>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}>
                     {SUGGESTIONS.map((s, i) => (
