@@ -56,7 +56,7 @@ const MODELS = {
     color: "#2563eb",
     call: async (apiKey, messages, systemPrompt) => {
       const res = await fetch(
-        "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent",
+        "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent",
         {
           method: "POST",
           headers: {
